@@ -51,10 +51,31 @@ const ScannerPage: React.FC = () => {
   const [showDebugInfo, setShowDebugInfo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { addMessageToHistory } = useMessages();
+  const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
+  const [permissionChecked, setPermissionChecked] = useState(false);
 
   React.useEffect(() => {
     collectDebugInfo();
   }, []);
+
+  React.useEffect(() => {
+    // Only check permission if running in Android bridge environment
+    if (typeof window !== "undefined" && (window as any).AndroidBridge) {
+      (window as any).AndroidBridge.checkCameraPermission();
+      (window as any).onCameraPermissionResult = function (granted: boolean | string) {
+        setPermissionChecked(true);
+        setPermissionGranted(granted === true || granted === "true");
+      };
+    } else if (debugInfo?.bridgeType === 'ANDROID') {
+      // If bridge expected but not present, show error
+      setPermissionChecked(true);
+      setPermissionGranted(false);
+    } else {
+      // Not Android bridge, assume permission is handled by browser
+      setPermissionChecked(true);
+      setPermissionGranted(true);
+    }
+  }, [debugInfo?.bridgeType]);
 
   const collectDebugInfo = async () => {
     const info: DebugInfo = {
@@ -275,67 +296,77 @@ const ScannerPage: React.FC = () => {
               <div className="p-4">
                 {activeTab === 'camera' && canUseCamera && (
                   <div className="space-y-4">
-                    <div className="aspect-square bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden relative">
-                      {isScanning ? (
-                        <ErrorBoundary fallback={
-                          <div className="flex items-center justify-center h-full">
-                            <div className="text-center">
-                              <AlertTriangle className="h-8 w-8 text-red-500 mx-auto mb-2" />
-                              <p className="text-red-500 text-sm">Camera failed to load</p>
-                              <button
-                                onClick={stopScanning}
-                                className="mt-2 px-3 py-1 text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded"
-                              >
-                                Stop
-                              </button>
+                    {!permissionChecked ? (
+                      <div className="flex items-center justify-center h-40">
+                        <p className="text-gray-500 dark:text-gray-400 text-sm">Checking camera permission...</p>
+                      </div>
+                    ) : !permissionGranted ? (
+                      <div className="flex items-center justify-center h-40">
+                        <p className="text-red-500 dark:text-red-400 text-sm">Camera permission not granted.</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="aspect-square bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden relative">
+                          {isScanning ? (
+                            <ErrorBoundary fallback={
+                              <div className="flex items-center justify-center h-full">
+                                <div className="text-center">
+                                  <AlertTriangle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+                                  <p className="text-red-500 text-sm">Camera failed to load</p>
+                                  <button
+                                    onClick={stopScanning}
+                                    className="mt-2 px-3 py-1 text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded"
+                                  >
+                                    Stop
+                                  </button>
+                                </div>
+                              </div>
+                            }>
+                              <BarcodeScanner
+                                width="100%"
+                                height="100%"
+                                onUpdate={(err, result) => {
+                                  if (result) {
+                                    handleScan(result.getText(), result);
+                                  }
+                                  if (err) {
+                                    handleError(err);
+                                  }
+                                }}
+                              />
+                            </ErrorBoundary>
+                          ) : (
+                            <div className="flex items-center justify-center h-full">
+                              <div className="text-center">
+                                <Camera className="h-8 w-8 sm:h-12 sm:w-12 text-gray-400 mx-auto mb-2" />
+                                <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                  Click start to begin scanning
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                        }>
-                          <BarcodeScanner
-                            width="100%"
-                            height="100%"
-                            onUpdate={(err, result) => {
-                              console.log(result,err)
-                              if (result) {
-                                handleScan(result.getText(), result);
-                              }
-                              if (err) {
-                                handleError(err);
-                              }
-                            }}
-                          />
-                        </ErrorBoundary>
-                      ) : (
-                        <div className="flex items-center justify-center h-full">
-                          <div className="text-center">
-                            <Camera className="h-8 w-8 sm:h-12 sm:w-12 text-gray-400 mx-auto mb-2" />
-                            <p className="text-gray-500 dark:text-gray-400 text-sm">
-                              Click start to begin scanning
-                            </p>
-                          </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                    
-                    <div className="flex space-x-2">
-                      {!isScanning ? (
-                        <button
-                          onClick={startScanning}
-                          className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors text-sm sm:text-base"
-                        >
-                          <Camera className="h-4 w-4" />
-                          <span>Start Scanning</span>
-                        </button>
-                      ) : (
-                        <button
-                          onClick={stopScanning}
-                          className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors text-sm sm:text-base"
-                        >
-                          <X className="h-4 w-4" />
-                          <span>Stop Scanning</span>
-                        </button>
-                      )}
-                    </div>
+                        <div className="flex space-x-2">
+                          {!isScanning ? (
+                            <button
+                              onClick={startScanning}
+                              className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors text-sm sm:text-base"
+                            >
+                              <Camera className="h-4 w-4" />
+                              <span>Start Scanning</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={stopScanning}
+                              className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors text-sm sm:text-base"
+                            >
+                              <X className="h-4 w-4" />
+                              <span>Stop Scanning</span>
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
 
