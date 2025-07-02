@@ -340,7 +340,7 @@ const ScannerPage: React.FC = () => {
                               <div className="text-center">
                                 <Camera className="h-8 w-8 sm:h-12 sm:w-12 text-gray-400 mx-auto mb-2" />
                                 <p className="text-gray-500 dark:text-gray-400 text-sm">
-                                  Start Scanning
+                                  Click start to begin scanning
                                 </p>
                               </div>
                             </div>
