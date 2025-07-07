@@ -6,6 +6,7 @@ import Navigation from './components/Navigation';
 import Editor from './components/Editor';
 import HistoryPanel from './components/HistoryPanel';
 import ScannerPage from './components/ScannerPage';
+import UrlNavigator from './components/UrlNavigator';
 import ErrorBoundary from './components/ErrorBoundary';
 import { MessageProvider } from './context/MessageContext';
 
@@ -32,6 +33,7 @@ function App() {
                   </div>
                 } />
                 <Route path="/scanner" element={<ScannerPage />} />
+                <Route path="/url-navigator" element={<UrlNavigator />} />
               </Routes>
             </main>
           </div>

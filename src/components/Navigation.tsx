@@ -1,13 +1,14 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { MessageSquare, QrCode } from 'lucide-react';
+import { MessageSquare, QrCode, Globe } from 'lucide-react';
 
 const Navigation: React.FC = () => {
   const location = useLocation();
   
   const navItems = [
     { path: '/', label: 'Message Editor', icon: MessageSquare },
-    { path: '/scanner', label: 'QR/Barcode Scanner', icon: QrCode }
+    { path: '/scanner', label: 'QR/Barcode Scanner', icon: QrCode },
+    { path: '/url-navigator', label: 'URL Navigator', icon: Globe }
   ];
   
   return (
