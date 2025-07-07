@@ -1,6 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
-import BarcodeScanner from 'react-qr-barcode-scanner';
-import { BarcodeScanner as BarcodeScannerV2  } from 'react-barcode-scanner'
+import { BarcodeScanner } from 'react-barcode-scanner';
 import "react-barcode-scanner/polyfill"
 import { 
   Camera, 
