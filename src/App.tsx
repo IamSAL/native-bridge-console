@@ -6,6 +6,7 @@ import Navigation from './components/Navigation';
 import Editor from './components/Editor';
 import HistoryPanel from './components/HistoryPanel';
 import ScannerPage from './components/ScannerPage';
+import NativeBarcodeScanner from './components/NativeBarcodeScanner';
 import UrlNavigator from './components/UrlNavigator';
 import ErrorBoundary from './components/ErrorBoundary';
 import { MessageProvider } from './context/MessageContext';
@@ -33,6 +34,7 @@ function App() {
                   </div>
                 } />
                 <Route path="/scanner" element={<ScannerPage />} />
+                <Route path="/native-barcode-scanner" element={<NativeBarcodeScanner />} />
                 <Route path="/url-navigator" element={<UrlNavigator />} />
               </Routes>
             </main>

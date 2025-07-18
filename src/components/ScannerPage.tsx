@@ -1,29 +1,55 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { BarcodeScanner } from 'react-barcode-scanner';
 import "react-barcode-scanner/polyfill"
+import Quagga from '@ericblade/quagga2';
 import { 
   Camera, 
   Upload, 
   AlertTriangle, 
   CheckCircle, 
   Copy, 
-  RefreshCw,
   Info,
   Smartphone,
   Monitor,
   Zap,
   QrCode,
-  X
+  X,
+  ChevronDown
 } from 'lucide-react';
 import { useMessages } from '../context/MessageContext';
 import { detectBridgeType, BridgeType } from '../utils/bridgeUtils';
 import ErrorBoundary from './ErrorBoundary';
+import NativeBarcodeScanner from './NativeBarcodeScanner';
+import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
+
+// Type definitions for extended window object
+declare global {
+  interface Window {
+    AndroidBridge?: {
+      checkCameraPermission: () => void;
+    };
+    onCameraPermissionResult?: (granted: boolean | string) => void;
+    webkitRTCPeerConnection?: typeof RTCPeerConnection;
+    mozRTCPeerConnection?: typeof RTCPeerConnection;
+  }
+}
+
+// Type definitions for Quagga2
+interface QuaggaResult {
+  codeResult: {
+    code: string;
+    format: string;
+  };
+}
+
+
 
 interface ScanResult {
   text: string;
   format?: string;
   timestamp: Date;
   source: 'camera' | 'file';
+  rawResult?: unknown;
 }
 
 interface DebugInfo {
@@ -40,6 +66,16 @@ interface DebugInfo {
   };
 }
 
+type ScannerType = 'zxing' | 'quagga2' | 'native';
+
+interface ScannerConfig {
+  type: ScannerType;
+  name: string;
+  description: string;
+  icon: React.ReactNode;
+  supported: boolean;
+}
+
 const ScannerPage: React.FC = () => {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [isScanning, setIsScanning] = useState(false);
@@ -48,6 +84,9 @@ const ScannerPage: React.FC = () => {
   const [scanHistory, setScanHistory] = useState<ScanResult[]>([]);
   const [activeTab, setActiveTab] = useState<'camera' | 'upload'>('camera');
   const [showDebugInfo, setShowDebugInfo] = useState(false);
+  const [selectedScanner, setSelectedScanner] = useState<ScannerType>('zxing');
+  const [showScannerSelection, setShowScannerSelection] = useState(false);
+  const [showNativeScanner, setShowNativeScanner] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { addMessageToHistory } = useMessages();
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
@@ -59,13 +98,13 @@ const ScannerPage: React.FC = () => {
 
   React.useEffect(() => {
     // Only check permission if running in Android bridge environment
-    if (typeof window !== "undefined" && (window as any).AndroidBridge) {
-      (window as any).AndroidBridge.checkCameraPermission();
-      (window as any).onCameraPermissionResult = function (granted: boolean | string) {
+    if (typeof window !== "undefined" && window.AndroidBridge) {
+      window.AndroidBridge.checkCameraPermission();
+      window.onCameraPermissionResult = function (granted: boolean | string) {
         setPermissionChecked(true);
         setPermissionGranted(granted === true || granted === "true");
       };
-    } else if (debugInfo?.bridgeType === 'ANDROID') {
+    } else if (debugInfo?.bridgeType === BridgeType.ANDROID) {
       // If bridge expected but not present, show error
       setPermissionChecked(true);
       setPermissionGranted(false);
@@ -93,7 +132,7 @@ const ScannerPage: React.FC = () => {
       try {
         const cameraPermission = await navigator.permissions.query({ name: 'camera' as PermissionName });
         info.permissions.camera = cameraPermission.state;
-      } catch (e) {
+      } catch {
         console.log('Camera permission check not supported');
       }
     }
@@ -101,7 +140,7 @@ const ScannerPage: React.FC = () => {
     setDebugInfo(info);
   };
 
-  const handleScan = useCallback((result: string, rawResult) => {
+  const handleScan = useCallback((result: string, rawResult: unknown) => {
     if (result) {
       const scanData: ScanResult = {
         text: result,
@@ -124,11 +163,9 @@ const ScannerPage: React.FC = () => {
     }
   }, [addMessageToHistory, debugInfo]);
 
-  const handleError = useCallback((error: any) => {
-    console.log("ERROR OCCURED", error)
-    // console.error('Scanner error:', error);
-    // setError(`Scanner error: ${error?.message || 'Unknown error'}`);
-    // setIsScanning(false);
+  const handleError = useCallback((error: Error | string) => {
+    console.log("ERROR OCCURRED", error);
+    // Silently handle errors for now - too many false positives
   }, []);
 
   const startScanning = () => {
@@ -174,7 +211,7 @@ const ScannerPage: React.FC = () => {
             timestamp: scanData.timestamp.toISOString()
           }, true, debugInfo?.bridgeType);
           
-        } catch (error) {
+        } catch {
           setError('Failed to process uploaded image');
         }
       };
@@ -211,10 +248,106 @@ const ScannerPage: React.FC = () => {
   const canUploadFile = debugInfo?.fileUploadSupported;
   const hasAnySupport = canUseCamera || canUploadFile;
 
+  const scannerConfigs: ScannerConfig[] = [
+    {
+      type: 'zxing',
+      name: 'ZXing.js',
+      description: 'JavaScript port of Google\'s ZXing library',
+      icon: <QrCode className="h-4 w-4" />,
+      supported: true
+    },
+    {
+      type: 'quagga2',
+      name: 'Quagga2',
+      description: 'Advanced barcode reader with machine learning',
+      icon: <Zap className="h-4 w-4" />,
+      supported: typeof Quagga !== 'undefined'
+    },
+    {
+      type: 'native',
+      name: 'Native API',
+      description: 'Browser\'s native Barcode Detection API',
+      icon: <Smartphone className="h-4 w-4" />,
+      supported: typeof window !== 'undefined' && 'BarcodeDetector' in window
+    }
+  ];
+
+  const handleScannerChange = (scannerType: ScannerType) => {
+    setSelectedScanner(scannerType);
+    setShowScannerSelection(false);
+    setIsScanning(false);
+    setError(null);
+    setScanResult(null);
+    
+    if (scannerType === 'native') {
+      setShowNativeScanner(true);
+    } else {
+      setShowNativeScanner(false);
+    }
+  };
+
+  const handleNativeScannerClose = () => {
+    setShowNativeScanner(false);
+    setSelectedScanner('zxing'); // Reset to default
+  };
+
+  const renderScannerComponent = () => {
+    if (selectedScanner === 'native') {
+      return null; // Native scanner opens in fullscreen
+    }
+
+    switch (selectedScanner) {
+      case 'zxing':
+        return (
+          <ZXingScannerComponent
+            isScanning={isScanning}
+            onScan={handleScan}
+            onError={handleError}
+          />
+        );
+      case 'quagga2':
+        return (
+          <QuaggaScannerComponent
+            isScanning={isScanning}
+            onScan={handleScan}
+            onError={handleError}
+          />
+        );
+      default:
+        return (
+          <BarcodeScanner
+            width="100%"
+            height="100%"
+            onScan={(result) => {
+              if (result) {
+                handleScan(result, { result });
+              }
+            }}
+            onError={handleError}
+          />
+        );
+    }
+  };
+
+  const selectedScannerConfig = scannerConfigs.find(config => config.type === selectedScanner);
+
   return (
     <ErrorBoundary>
+      {/* Native Scanner Overlay */}
+      {showNativeScanner && (
+        <div className="fixed inset-0 z-50">
+          <NativeBarcodeScanner />
+          <button
+            onClick={handleNativeScannerClose}
+            className="absolute top-4 left-4 z-50 p-2 bg-black/50 hover:bg-black/70 rounded-full transition-colors"
+          >
+            <X className="h-6 w-6 text-white" />
+          </button>
+        </div>
+      )}
+
       <div className="space-y-4 sm:space-y-6">
-        {/* Header */}
+        {/* Header with Scanner Selection */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
             <div>
@@ -223,10 +356,61 @@ const ScannerPage: React.FC = () => {
                 <span>QR/Barcode Scanner</span>
               </h1>
               <p className="text-gray-600 dark:text-gray-400 mt-1 text-sm sm:text-base">
-                Test barcode and QR code scanning across different platforms
+                Test barcode and QR code scanning with different readers
               </p>
             </div>
-            <div className="flex items-center justify-between sm:justify-end space-x-2">
+            <div className="flex items-center space-x-3">
+              {/* Scanner Selection Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowScannerSelection(!showScannerSelection)}
+                  className="flex items-center space-x-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                >
+                  {selectedScannerConfig?.icon}
+                  <span className="text-sm font-medium">{selectedScannerConfig?.name}</span>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${showScannerSelection ? 'rotate-180' : ''}`} />
+                </button>
+                
+                {showScannerSelection && (
+                  <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-gray-800 rounded-lg shadow-lg border dark:border-gray-700 z-10">
+                    <div className="p-2">
+                      <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2 px-2">
+                        Choose Scanner Engine
+                      </h3>
+                      {scannerConfigs.map((config) => (
+                        <button
+                          key={config.type}
+                          onClick={() => handleScannerChange(config.type)}
+                          disabled={!config.supported}
+                          className={`w-full text-left p-3 rounded-lg transition-colors ${
+                            selectedScanner === config.type
+                              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                              : config.supported
+                                ? 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                                : 'opacity-50 cursor-not-allowed'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-3">
+                            {config.icon}
+                            <div>
+                              <div className="font-medium text-sm">{config.name}</div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                {config.description}
+                              </div>
+                              {!config.supported && (
+                                <div className="text-xs text-red-500 dark:text-red-400">
+                                  Not supported in this browser
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
               <div className="flex items-center space-x-2 text-sm">
                 {getBridgeIcon(debugInfo?.bridgeType || BridgeType.NONE)}
                 <span className="text-gray-500 dark:text-gray-400">
@@ -262,33 +446,41 @@ const ScannerPage: React.FC = () => {
             {/* Scanner Controls */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
               <div className="p-4 border-b dark:border-gray-700">
-                <div className="flex space-x-2 sm:space-x-4">
-                  {canUseCamera && (
-                    <button
-                      onClick={() => setActiveTab('camera')}
-                      className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-colors text-sm sm:text-base ${
-                        activeTab === 'camera'
-                          ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                      }`}
-                    >
-                      <Camera className="h-4 w-4" />
-                      <span>Camera</span>
-                    </button>
-                  )}
-                  {canUploadFile && (
-                    <button
-                      onClick={() => setActiveTab('upload')}
-                      className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-colors text-sm sm:text-base ${
-                        activeTab === 'upload'
-                          ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                      }`}
-                    >
-                      <Upload className="h-4 w-4" />
-                      <span>Upload</span>
-                    </button>
-                  )}
+                <div className="flex items-center justify-between">
+                  <div className="flex space-x-2 sm:space-x-4">
+                    {canUseCamera && (
+                      <button
+                        onClick={() => setActiveTab('camera')}
+                        className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-colors text-sm sm:text-base ${
+                          activeTab === 'camera'
+                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                        }`}
+                      >
+                        <Camera className="h-4 w-4" />
+                        <span>Camera</span>
+                      </button>
+                    )}
+                    {canUploadFile && (
+                      <button
+                        onClick={() => setActiveTab('upload')}
+                        className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-colors text-sm sm:text-base ${
+                          activeTab === 'upload'
+                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                        }`}
+                      >
+                        <Upload className="h-4 w-4" />
+                        <span>Upload</span>
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* Current Scanner Badge */}
+                  <div className="flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
+                    {selectedScannerConfig?.icon}
+                    <span>{selectedScannerConfig?.name}</span>
+                  </div>
                 </div>
               </div>
 
@@ -311,7 +503,7 @@ const ScannerPage: React.FC = () => {
                               <div className="flex items-center justify-center h-full">
                                 <div className="text-center">
                                   <AlertTriangle className="h-8 w-8 text-red-500 mx-auto mb-2" />
-                                  <p className="text-red-500 text-sm">Camera failed to load</p>
+                                  <p className="text-red-500 text-sm">Scanner failed to load</p>
                                   <button
                                     onClick={stopScanning}
                                     className="mt-2 px-3 py-1 text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded"
@@ -321,18 +513,7 @@ const ScannerPage: React.FC = () => {
                                 </div>
                               </div>
                             }>
-                              <BarcodeScanner
-                                width="100%"
-                                height="100%"
-                                onUpdate={(err, result) => {
-                                  if (result) {
-                                    handleScan(result.getText(), result);
-                                  }
-                                  if (err) {
-                                    handleError(err);
-                                  }
-                                }}
-                              />
+                              {renderScannerComponent()}
                             </ErrorBoundary>
                           ) : (
                             <div className="flex items-center justify-center h-full">
@@ -341,6 +522,9 @@ const ScannerPage: React.FC = () => {
                                 <p className="text-gray-500 dark:text-gray-400 text-sm">
                                   Click start to begin scanning
                                 </p>
+                                <p className="text-gray-400 dark:text-gray-500 text-xs mt-1">
+                                  Using {selectedScannerConfig?.name}
+                                </p>
                               </div>
                             </div>
                           )}
@@ -348,7 +532,7 @@ const ScannerPage: React.FC = () => {
                         <div className="flex space-x-2">
                           {!isScanning ? (
                             <button
-                              onClick={startScanning}
+                              onClick={selectedScanner === 'native' ? () => setShowNativeScanner(true) : startScanning}
                               className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors text-sm sm:text-base"
                             >
                               <Camera className="h-4 w-4" />
@@ -457,6 +641,181 @@ const ScannerPage: React.FC = () => {
         </div>
       </div>
     </ErrorBoundary>
+  );
+};
+
+// ZXing Scanner Component
+interface ZXingScannerProps {
+  isScanning: boolean;
+  onScan: (result: string, rawResult: unknown) => void;
+  onError: (error: Error | string) => void;
+}
+
+const ZXingScannerComponent: React.FC<ZXingScannerProps> = ({ isScanning, onScan, onError }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
+
+  const startScanning = React.useCallback(async () => {
+    try {
+      codeReaderRef.current = new BrowserMultiFormatReader();
+      
+      await codeReaderRef.current.decodeFromVideoDevice(
+        null,
+        videoRef.current!,
+        (result, error) => {
+          if (result) {
+            onScan(result.getText(), {
+              text: result.getText(),
+              format: result.getBarcodeFormat(),
+              timestamp: new Date(),
+              rawResult: result
+            });
+          }
+          if (error && !(error instanceof NotFoundException)) {
+            onError(error);
+          }
+        }
+      );
+    } catch (error) {
+      onError(error as Error);
+    }
+  }, [onScan, onError]);
+
+  const stopScanning = React.useCallback(() => {
+    if (codeReaderRef.current) {
+      codeReaderRef.current.reset();
+      codeReaderRef.current = null;
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (isScanning && videoRef.current) {
+      startScanning();
+    } else {
+      stopScanning();
+    }
+
+    return () => {
+      stopScanning();
+    };
+  }, [isScanning, startScanning, stopScanning]);
+
+  return (
+    <video
+      ref={videoRef}
+      className="w-full h-full object-cover"
+    />
+  );
+};
+
+// Quagga2 Scanner Component
+interface QuaggaScannerProps {
+  isScanning: boolean;
+  onScan: (result: string, rawResult: unknown) => void;
+  onError: (error: Error | string) => void;
+}
+
+const QuaggaScannerComponent: React.FC<QuaggaScannerProps> = ({ isScanning, onScan, onError }) => {
+  const scannerRef = useRef<HTMLDivElement>(null);
+
+  const startScanning = React.useCallback(() => {
+    if (typeof Quagga === 'undefined') {
+      onError('Quagga2 is not available');
+      return;
+    }
+
+    Quagga.init({
+      inputStream: {
+        name: "Live",
+        type: "LiveStream",
+        target: scannerRef.current,
+        constraints: {
+          width: 640,
+          height: 480,
+          facingMode: "environment"
+        }
+      },
+      decoder: {
+        readers: [
+          "code_128_reader",
+          "ean_reader",
+          "ean_8_reader",
+          "code_39_reader",
+          "code_39_vin_reader",
+          "codabar_reader",
+          "upc_reader",
+          "upc_e_reader",
+          "i2of5_reader"
+        ]
+      },
+      locate: true,
+      locator: {
+        patchSize: "medium",
+        halfSample: true
+      },
+      numOfWorkers: 2,
+      frequency: 10,
+      debug: {
+        showCanvas: false,
+        showPatches: false,
+        showFoundPatches: false,
+        showSkeleton: false,
+        showLabels: false,
+        showPatchLabels: false,
+        showRemainingPatchLabels: false,
+        boxFromPatches: {
+          showTransformed: false,
+          showTransformedBox: false,
+          showBB: false
+        }
+      }
+    }, (err: Error | null) => {
+      if (err) {
+        onError(err);
+        return;
+      }
+      
+      Quagga.start();
+      
+      Quagga.onDetected((result: QuaggaResult) => {
+        onScan(result.codeResult.code, {
+          text: result.codeResult.code,
+          format: result.codeResult.format,
+          timestamp: new Date(),
+          rawResult: result
+        });
+      });
+    });
+  }, [onScan, onError]);
+
+  const stopScanning = React.useCallback(() => {
+    try {
+      if (typeof Quagga !== 'undefined') {
+        Quagga.stop();
+      }
+    } catch (error) {
+      console.error('Error stopping Quagga:', error);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (isScanning && scannerRef.current) {
+      startScanning();
+    } else {
+      stopScanning();
+    }
+
+    return () => {
+      stopScanning();
+    };
+  }, [isScanning, startScanning, stopScanning]);
+
+  return (
+    <div 
+      ref={scannerRef} 
+      className="w-full h-full relative overflow-hidden"
+      style={{ background: '#000' }}
+    />
   );
 };
 
