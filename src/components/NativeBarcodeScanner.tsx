@@ -211,7 +211,7 @@ const NativeBarcodeScanner: React.FC = () => {
 
         // Create barcode detector for CODE_128 and CODE_39
         detectorRef.current = new BarcodeDetector({
-          formats: ['code_128', 'code_39']
+         
         });
 
         // Start detection loop
@@ -484,7 +484,7 @@ const NativeBarcodeScanner: React.FC = () => {
             {/* Instructions */}
             <div className="text-white text-xs sm:text-sm">
               <p className="font-medium mb-1">Position barcode within the focus area</p>
-              <p className="text-gray-300 text-xs">Supports CODE_128 and CODE_39 formats</p>
+              {/* <p className="text-gray-300 text-xs">Supports CODE_128 and CODE_39 formats</p> */}
             </div>
             
             {/* Scan Button */}
