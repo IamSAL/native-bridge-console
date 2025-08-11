@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { MessageSquare, QrCode, Globe, Zap } from 'lucide-react';
+import { MessageSquare, QrCode, Globe, Zap, CreditCard } from 'lucide-react';
 
 const Navigation: React.FC = () => {
   const location = useLocation();
@@ -9,7 +9,8 @@ const Navigation: React.FC = () => {
     { path: '/', label: 'Message Editor', icon: MessageSquare },
     { path: '/scanner', label: 'QR/Barcode Scanner', icon: QrCode },
     { path: '/native-barcode-scanner', label: 'Native Barcode Scanner', icon: Zap },
-    { path: '/url-navigator', label: 'URL Navigator', icon: Globe }
+    { path: '/url-navigator', label: 'URL Navigator', icon: Globe },
+    { path: '/emvo-qr-generator', label: 'EMVO QR Generator', icon: CreditCard }
   ];
   
   return (

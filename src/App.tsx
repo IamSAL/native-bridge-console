@@ -8,6 +8,7 @@ import HistoryPanel from './components/HistoryPanel';
 import ScannerPage from './components/ScannerPage';
 import NativeBarcodeScanner from './components/NativeBarcodeScanner';
 import UrlNavigator from './components/UrlNavigator';
+import EmvoQrGenerator from './components/EmvoQrGenerator';
 import ErrorBoundary from './components/ErrorBoundary';
 import { MessageProvider } from './context/MessageContext';
 
@@ -36,6 +37,7 @@ function App() {
                 <Route path="/scanner" element={<ScannerPage />} />
                 <Route path="/native-barcode-scanner" element={<NativeBarcodeScanner />} />
                 <Route path="/url-navigator" element={<UrlNavigator />} />
+                <Route path="/emvo-qr-generator" element={<EmvoQrGenerator />} />
               </Routes>
             </main>
           </div>
