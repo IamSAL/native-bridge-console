@@ -42,7 +42,7 @@ const UrlNavigator: React.FC = () => {
       : `https://${url}`;
     
     // Open in new tab
-    window.open(urlToNavigate, '_blank', 'noopener,noreferrer');
+    window.open(urlToNavigate, '_self', 'noopener,noreferrer');
     
     setIsLoading(false);
   };
