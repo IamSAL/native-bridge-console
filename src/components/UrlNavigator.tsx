@@ -41,8 +41,7 @@ const UrlNavigator: React.FC = () => {
       ? url 
       : `https://${url}`;
     
-    // Open in new tab
-    window.open(urlToNavigate, '_self', 'noopener,noreferrer');
+  window.location.href=urlToNavigate?.toString()
     
     setIsLoading(false);
   };
@@ -78,7 +77,7 @@ const UrlNavigator: React.FC = () => {
         <div className="space-y-4">
           <div>
             <label htmlFor="url-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Enter URL to navigate
+              Enter a valid URL:
             </label>
             <div className="flex space-x-2">
               <div className="flex-1">
