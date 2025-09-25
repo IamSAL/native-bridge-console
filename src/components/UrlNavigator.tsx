@@ -29,9 +29,12 @@ const UrlNavigator: React.FC = () => {
     } else {
       setIsValidUrl(validateUrl(value));
     }
+
+    console.log({url,isValidUrl})
   };
 
   const handleNavigate = () => {
+    console.log({url,isValidUrl})
     if (!url.trim() || !isValidUrl) return;
     
     setIsLoading(true);
@@ -42,7 +45,7 @@ const UrlNavigator: React.FC = () => {
       : `https://${url}`;
     
   window.location.href=urlToNavigate?.toString()
-    
+    console.log({urlToNavigate})
     setIsLoading(false);
   };
 
@@ -102,7 +105,7 @@ const UrlNavigator: React.FC = () => {
               </div>
               <button
                 onClick={handleNavigate}
-                disabled={!url.trim() || !isValidUrl || isLoading}
+                
                 className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 transition-colors duration-200"
               >
                 {isLoading ? (
