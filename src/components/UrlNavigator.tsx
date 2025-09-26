@@ -43,8 +43,20 @@ const UrlNavigator: React.FC = () => {
     const urlToNavigate = url.startsWith('http://') || url.startsWith('https://') 
       ? url 
       : `https://${url}`;
+
+    try {
+      // Try window.open first (works better in some WebView scenarios)
+      const newWindow = window.open(urlToNavigate, '_self');
+      if (!newWindow) {
+        // Fallback to location.href if popup blocked
+        window.location.href = urlToNavigate;
+      }
+    } catch (error) {
+      console.error('Navigation failed:', error);
+      // Show user-friendly error message
+      alert(`Unable to navigate to ${urlToNavigate}. This may be due to WebView security restrictions.`);
+    }
     
-  window.location.href=urlToNavigate?.toString()
     console.log({urlToNavigate})
     setIsLoading(false);
   };
