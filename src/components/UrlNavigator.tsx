@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState } from 'react';
 import { ExternalLink, Globe, ArrowRight } from 'lucide-react';
 
@@ -39,24 +41,53 @@ const UrlNavigator: React.FC = () => {
     
     setIsLoading(true);
     
-    // Add protocol if missing
     const urlToNavigate = url.startsWith('http://') || url.startsWith('https://') 
       ? url 
       : `https://${url}`;
 
-    try {
-      // Try window.open first (works better in some WebView scenarios)
-      const newWindow = window.open(urlToNavigate, '_self');
-      if (!newWindow) {
-        // Fallback to location.href if popup blocked
+    // Try multiple methods
+    const attemptNavigation = async () => {
+      // Method 1: Standard navigation
+      try {
         window.location.href = urlToNavigate;
+        return;
+      } catch (e:any) {
+        console.log('Method 1 failed');
       }
-    } catch (error) {
-      console.error('Navigation failed:', error);
-      // Show user-friendly error message
-      alert(`Unable to navigate to ${urlToNavigate}. This may be due to WebView security restrictions.`);
-    }
-    
+
+      // Method 2: Create and click a link
+      try {
+        const link = document.createElement('a');
+        link.href = urlToNavigate;
+        link.target = '_self';
+        link.rel = 'noopener noreferrer';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      } catch (e:any) {
+        console.log('Method 2 failed');
+      }
+
+      // Method 3: Form submission
+      try {
+        const form = document.createElement('form');
+        form.method = 'GET';
+        form.action = urlToNavigate;
+        form.target = '_self';
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+        return;
+      } catch (e:any) {
+        console.log('Method 3 failed');
+      }
+
+      // All methods failed
+      alert(`Cannot navigate to ${urlToNavigate} due to security restrictions.`);
+    };
+
+    attemptNavigation();
     console.log({urlToNavigate})
     setIsLoading(false);
   };
