@@ -86,7 +86,7 @@ const UrlNavigator: React.FC = () => {
       // All methods failed
       alert(`Cannot navigate to ${urlToNavigate} due to security restrictions.`);
     };
-
+    console.log("try nto navigate:")
     attemptNavigation();
     console.log({urlToNavigate})
     setIsLoading(false);
