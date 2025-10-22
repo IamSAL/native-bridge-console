@@ -9,6 +9,7 @@ const UrlNavigator: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   const validateUrl = (inputUrl: string): boolean => {
+    return true;
     try {
       // Add protocol if missing
       const urlToTest = inputUrl.startsWith('http://') || inputUrl.startsWith('https://') 
