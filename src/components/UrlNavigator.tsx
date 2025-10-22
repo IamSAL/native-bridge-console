@@ -3,10 +3,15 @@
 import React, { useState } from 'react';
 import { ExternalLink, Globe, ArrowRight } from 'lucide-react';
 
+
+
+
+
 const UrlNavigator: React.FC = () => {
   const [url, setUrl] = useState('');
   const [isValidUrl, setIsValidUrl] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [useAlternativeNavigation, setUseAlternativeNavigation] = useState(false);
 
   const validateUrl = (inputUrl: string): boolean => {
     return true;
@@ -36,6 +41,26 @@ const UrlNavigator: React.FC = () => {
     console.log({url,isValidUrl})
   };
 
+  const handleAlternativeNavigation = (urlToNavigate: string) => {
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    
+    console.log('Using alternative navigation method', { isIOS, url: urlToNavigate });
+    
+    // For iOS, try direct navigation with fallback
+    if (isIOS) {
+      // Try to navigate directly
+      window.location.href = urlToNavigate;
+      
+      // Fallback after a delay (in case the URL scheme fails)
+      setTimeout(() => {
+        window.location.href = urlToNavigate;
+      }, 700);
+    } else {
+      // For Android/other platforms, direct navigation
+      window.location.href = urlToNavigate;
+    }
+  };
+
   const handleNavigate = () => {
     console.log({url,isValidUrl})
     if (!url.trim() || !isValidUrl) return;
@@ -43,6 +68,13 @@ const UrlNavigator: React.FC = () => {
     setIsLoading(true);
     
     const urlToNavigate = url;
+
+    // Use alternative navigation method if checkbox is checked
+    if (useAlternativeNavigation) {
+      handleAlternativeNavigation(urlToNavigate);
+      setIsLoading(false);
+      return;
+    }
 
     // Try multiple methods
     const attemptNavigation = async () => {
@@ -160,6 +192,19 @@ const UrlNavigator: React.FC = () => {
                 )}
               </button>
             </div>
+          </div>
+
+          <div className="flex items-center space-x-2 py-3">
+            <input
+              id="alternative-nav"
+              type="checkbox"
+              checked={useAlternativeNavigation}
+              onChange={(e) => setUseAlternativeNavigation(e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:border-gray-600 dark:bg-gray-700"
+            />
+            <label htmlFor="alternative-nav" className="text-sm text-gray-700 dark:text-gray-300">
+              Use alternative navigation method (for iOS WebView with HTTP/IP addresses)
+            </label>
           </div>
 
           <div className="border-t pt-4 dark:border-gray-700">
