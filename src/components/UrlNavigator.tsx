@@ -41,9 +41,7 @@ const UrlNavigator: React.FC = () => {
     
     setIsLoading(true);
     
-    const urlToNavigate = url.startsWith('http://') || url.startsWith('https://') 
-      ? url 
-      : `https://${url}`;
+    const urlToNavigate = url;
 
     // Try multiple methods
     const attemptNavigation = async () => {
